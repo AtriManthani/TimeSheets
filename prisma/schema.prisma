@@ -1,0 +1,324 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  EMPLOYEE
+  MANAGER
+  GWEN
+  DIRECTOR
+  COMMISSIONER
+  HR_LEAD
+  CITO
+  ADMIN
+}
+
+enum TimesheetStatus {
+  DRAFT
+  IN_INTERVIEW
+  GENERATED
+  SUBMITTED
+  UNDER_REVIEW
+  NEEDS_CORRECTION
+  RESUBMITTED
+  MANAGER_APPROVED
+  APPROVED
+  REJECTED
+  FINALIZED
+}
+
+enum ApprovalDecisionType {
+  APPROVED
+  REJECTED
+  NEEDS_CORRECTION
+}
+
+enum NotificationType {
+  REGISTRATION_COMPLETE
+  PROFILE_INCOMPLETE
+  TIMESHEET_DRAFT_GENERATED
+  TIMESHEET_SUBMITTED
+  CORRECTION_REQUESTED
+  TIMESHEET_APPROVED
+  TIMESHEET_REJECTED
+  GWEN_APPROVED
+  MANAGER_APPROVED
+  APPROVAL_TASK_ASSIGNED
+  RESUBMISSION_RECEIVED
+  GENERAL
+}
+
+// ─── Auth Models ────────────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Core User Models ────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         UserRole @default(EMPLOYEE)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile       UserProfile?
+  timesheets    Timesheet[]
+  managedUsers  ManagerRelationship[] @relation("Manager")
+  managerOf     ManagerRelationship?  @relation("Employee")
+  approvalTasks ApprovalTask[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model UserProfile {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  employeeNumber String?   @unique
+  title          String?
+  department     String?
+  phone          String?
+  startDate      DateTime?
+  scheduleHours  Float     @default(40)
+  isComplete     Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?
+  updatedBy      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ManagerRelationship {
+  id            String   @id @default(cuid())
+  employeeId    String   @unique
+  managerId     String
+  isActive      Boolean  @default(true)
+  effectiveDate DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  employee User @relation("Employee", fields: [employeeId], references: [id])
+  manager  User @relation("Manager", fields: [managerId], references: [id])
+}
+
+// ─── Reference Data ──────────────────────────────────────────────────────────
+
+model WorkCategory {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  code        String  @unique
+  description String?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  timesheetEntries TimesheetEntry[]
+}
+
+model Holiday {
+  id          String   @id @default(cuid())
+  name        String
+  date        DateTime @db.Date
+  isRecurring Boolean  @default(false)
+  year        Int?
+
+  createdAt DateTime @default(now())
+}
+
+// ─── Timesheet Models ────────────────────────────────────────────────────────
+
+model Timesheet {
+  id                  String          @id @default(cuid())
+  userId              String
+  weekStartDate       DateTime        @db.Date
+  weekEndDate         DateTime        @db.Date
+  status              TimesheetStatus @default(DRAFT)
+  currentVersion      Int             @default(1)
+  totalHours          Float           @default(0)
+  regularHours        Float           @default(0)
+  overtimeHours       Float           @default(0)
+  notes               String?
+  submittedAt         DateTime?
+  managerApprovedAt   DateTime?
+  gwenApprovedAt      DateTime?
+  finalizedAt         DateTime?
+  correctionComments  String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  createdBy           String?
+  updatedBy           String?
+
+  user             User                      @relation(fields: [userId], references: [id])
+  entries          TimesheetEntry[]
+  versions         TimesheetVersion[]
+  approvalTasks    ApprovalTask[]
+  interviewSession TimesheetInterviewSession?
+
+  @@unique([userId, weekStartDate])
+}
+
+model TimesheetEntry {
+  id                   String  @id @default(cuid())
+  timesheetId          String
+  date                 DateTime @db.Date
+  dayOfWeek            String
+  regularHours         Float   @default(0)
+  overtimeHours        Float   @default(0)
+  sickHours            Float   @default(0)
+  vacationHours        Float   @default(0)
+  personalHolidayHours Float   @default(0)
+  holidayHours         Float   @default(0)
+  fmlaHours            Float   @default(0)
+  compTimeEarned       Float   @default(0)
+  compTimeUsed         Float   @default(0)
+  parentalLeaveHours   Float   @default(0)
+  preParlLeaveHours    Float   @default(0)
+  categoryId           String?
+  otReason             String?
+  notes                String?
+  totalHours           Float   @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  timesheet Timesheet     @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+  category  WorkCategory? @relation(fields: [categoryId], references: [id])
+}
+
+model TimesheetVersion {
+  id            String          @id @default(cuid())
+  timesheetId   String
+  versionNumber Int
+  status        TimesheetStatus
+  snapshotData  Json
+  changedBy     String
+  changeReason  String?
+
+  createdAt DateTime @default(now())
+
+  timesheet Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+}
+
+model TimesheetInterviewSession {
+  id           String  @id @default(cuid())
+  timesheetId  String  @unique
+  userId       String
+  messages     Json    @default("[]")
+  currentStep  String  @default("WEEK_DATES")
+  collectedData Json   @default("{}")
+  isComplete   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  timesheet Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+}
+
+// ─── Approval Models ─────────────────────────────────────────────────────────
+
+model ApprovalTask {
+  id           String    @id @default(cuid())
+  timesheetId  String
+  assignedTo   String
+  assignedRole String
+  sequence     Int       @default(1)
+  status       String    @default("PENDING")
+  dueDate      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  timesheet Timesheet          @relation(fields: [timesheetId], references: [id])
+  assignee  User               @relation(fields: [assignedTo], references: [id])
+  decisions ApprovalDecision[]
+}
+
+model ApprovalDecision {
+  id         String               @id @default(cuid())
+  taskId     String
+  decidedBy  String
+  decision   ApprovalDecisionType
+  comments   String?
+  decidedAt  DateTime             @default(now())
+
+  task ApprovalTask @relation(fields: [taskId], references: [id])
+}
+
+// ─── Notification Model ───────────────────────────────────────────────────────
+
+model Notification {
+  id                String           @id @default(cuid())
+  userId            String
+  type              NotificationType
+  title             String
+  message           String
+  isRead            Boolean          @default(false)
+  relatedEntityType String?
+  relatedEntityId   String?
+  metadata          Json?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String?
+  actorEmail  String?
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  ipAddress   String?
+
+  createdAt DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+}

@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "src/app/api/workflow/interview/route.ts": { "maxDuration": 60 },
+    "src/app/api/workflow/generate/route.ts": { "maxDuration": 60 },
+    "src/app/api/approvals/[id]/decide/route.ts": { "maxDuration": 30 }
+  },
+  "env": {
+    "NEXTAUTH_URL": "@nextauth_url"
+  }
+}
