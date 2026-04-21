@@ -6,7 +6,7 @@ import { listUsers } from "@/services/user.service";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatDate } from "@/lib/utils";
-import { TimesheetStatus } from "@prisma/client";
+import { TimesheetStatus, UserRole } from "@prisma/client";
 import { ROLE_LABELS } from "@/lib/constants";
 
 export default async function ExecutiveDashboardPage() {

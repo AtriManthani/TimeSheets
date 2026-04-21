@@ -35,10 +35,10 @@ export function Sidebar() {
   const filtered = navItems.filter((item) => {
     if (item.roles === "all") return true;
     if (item.roles === "employee")
-      return [UserRole.EMPLOYEE, ...EXECUTIVE_ROLES].includes(role as UserRole);
+      return ([UserRole.EMPLOYEE, ...EXECUTIVE_ROLES] as string[]).includes(role);
     if (item.roles === "manager") return role === UserRole.MANAGER;
     if (item.roles === "gwen") return role === UserRole.GWEN;
-    if (item.roles === "executive") return EXECUTIVE_ROLES.includes(role as UserRole);
+    if (item.roles === "executive") return (EXECUTIVE_ROLES as string[]).includes(role);
     return false;
   });
 
