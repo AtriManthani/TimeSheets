@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
 // One-time seed endpoint — protected by SEED_SECRET env var
-// After seeding, remove this file or disable SEED_SECRET
 export async function POST(req: Request) {
   const secret = req.headers.get("x-seed-secret");
   if (!secret || secret !== process.env.SEED_SECRET) {
@@ -29,17 +28,24 @@ export async function POST(req: Request) {
     prisma.user.create({ data: { email: "admin1@its.org", name: "Henry Taylor", passwordHash: await hash("Admin@123"), role: "ADMIN" } }),
   ]);
 
-  await prisma.userProfile.createMany({
+  // Create profiles (matching actual schema fields)
+  await Promise.all([
+    prisma.userProfile.create({ data: { userId: emp1.id, employeeNumber: "EMP001", title: "Software Engineer", department: "IT", scheduleHours: 40, isComplete: true } }),
+    prisma.userProfile.create({ data: { userId: emp2.id, employeeNumber: "EMP002", title: "Systems Analyst", department: "IT", scheduleHours: 40, isComplete: true } }),
+    prisma.userProfile.create({ data: { userId: mgr.id, employeeNumber: "MGR001", title: "IT Manager", department: "IT", scheduleHours: 40, isComplete: true } }),
+    prisma.userProfile.create({ data: { userId: gwen.id, employeeNumber: "GWN001", title: "Administrative Coordinator", department: "Administration", scheduleHours: 40, isComplete: true } }),
+    prisma.userProfile.create({ data: { userId: dir.id, employeeNumber: "DIR001", title: "Director of IT", department: "Executive", scheduleHours: 40, isComplete: true } }),
+    prisma.userProfile.create({ data: { userId: comm.id, employeeNumber: "COM001", title: "Commissioner", department: "Executive", scheduleHours: 40, isComplete: true } }),
+    prisma.userProfile.create({ data: { userId: hr.id, employeeNumber: "HR001", title: "HR Lead", department: "Human Resources", scheduleHours: 40, isComplete: true } }),
+    prisma.userProfile.create({ data: { userId: cito.id, employeeNumber: "CIT001", title: "Chief Information Technology Officer", department: "Executive", scheduleHours: 40, isComplete: true } }),
+    prisma.userProfile.create({ data: { userId: admin.id, employeeNumber: "ADM001", title: "System Administrator", department: "IT", scheduleHours: 40, isComplete: true } }),
+  ]);
+
+  // Manager relationships
+  await prisma.managerRelationship.createMany({
     data: [
-      { userId: emp1.id, employeeId: "EMP001", department: "IT", jobTitle: "Software Engineer", weeklyHours: 40, managerId: mgr.id, isComplete: true },
-      { userId: emp2.id, employeeId: "EMP002", department: "IT", jobTitle: "Systems Analyst", weeklyHours: 40, managerId: mgr.id, isComplete: true },
-      { userId: mgr.id, employeeId: "MGR001", department: "IT", jobTitle: "IT Manager", weeklyHours: 40, isComplete: true },
-      { userId: gwen.id, employeeId: "GWN001", department: "Administration", jobTitle: "Administrative Coordinator", weeklyHours: 40, isComplete: true },
-      { userId: dir.id, employeeId: "DIR001", department: "Executive", jobTitle: "Director of IT", weeklyHours: 40, isComplete: true },
-      { userId: comm.id, employeeId: "COM001", department: "Executive", jobTitle: "Commissioner", weeklyHours: 40, isComplete: true },
-      { userId: hr.id, employeeId: "HR001", department: "Human Resources", jobTitle: "HR Lead", weeklyHours: 40, isComplete: true },
-      { userId: cito.id, employeeId: "CIT001", department: "Executive", jobTitle: "Chief Information Technology Officer", weeklyHours: 40, isComplete: true },
-      { userId: admin.id, employeeId: "ADM001", department: "IT", jobTitle: "System Administrator", weeklyHours: 40, isComplete: true },
+      { employeeId: emp1.id, managerId: mgr.id },
+      { employeeId: emp2.id, managerId: mgr.id },
     ],
   });
 
