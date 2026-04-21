@@ -61,7 +61,7 @@ export default async function ExecutiveDashboardPage() {
                 : timesheets.map((ts) => (
                   <tr key={ts.id} className="hover:bg-gray-50">
                     <td className="px-4 py-2 font-medium">{(ts as any).user?.name}</td>
-                    <td className="px-4 py-2 text-gray-500">{ROLE_LABELS[(ts as any).user?.role]}</td>
+                    <td className="px-4 py-2 text-gray-500">{ROLE_LABELS[(ts as any).user?.role as UserRole] ?? (ts as any).user?.role}</td>
                     <td className="px-4 py-2">{formatDate(ts.weekStartDate)} – {formatDate(ts.weekEndDate)}</td>
                     <td className="px-4 py-2"><StatusBadge status={ts.status as TimesheetStatus} /></td>
                     <td className="px-4 py-2 text-right">{ts.totalHours}h</td>
