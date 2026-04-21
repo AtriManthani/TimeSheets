@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { registerSchema } from "@/lib/validation/schemas";
 import { createUser } from "@/services/user.service";
