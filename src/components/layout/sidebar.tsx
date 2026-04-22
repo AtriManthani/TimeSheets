@@ -3,25 +3,11 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { UserRole } from "@prisma/client";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: "🏠", roles: "all" },
-  { href: "/timesheets/new", label: "New Timesheet", icon: "➕", roles: "employee" },
-  { href: "/dashboard/manager", label: "Team Timesheets", icon: "👥", roles: "manager" },
-  { href: "/dashboard/gwen", label: "Approval Queue", icon: "✅", roles: "gwen" },
-  { href: "/dashboard/executive", label: "Org Overview", icon: "📊", roles: "executive" },
-  { href: "/notifications", label: "Notifications", icon: "🔔", roles: "all" },
-  { href: "/profile", label: "My Profile", icon: "👤", roles: "all" },
-  { href: "/audit", label: "Audit Logs", icon: "📋", roles: "executive" },
-];
-
-const EXECUTIVE_ROLES = [
-  UserRole.DIRECTOR,
-  UserRole.COMMISSIONER,
-  UserRole.HR_LEAD,
-  UserRole.CITO,
-  UserRole.ADMIN,
+  { href: "/dashboard", label: "Dashboard", icon: "🏠" },
+  { href: "/timesheets", label: "My Timesheets", icon: "📋" },
+  { href: "/profile", label: "My Profile", icon: "👤" },
 ];
 
 export function Sidebar() {
@@ -30,22 +16,10 @@ export function Sidebar() {
 
   if (!session) return null;
 
-  const role = session.user.role;
-
-  const filtered = navItems.filter((item) => {
-    if (item.roles === "all") return true;
-    if (item.roles === "employee")
-      return ([UserRole.EMPLOYEE, ...EXECUTIVE_ROLES] as string[]).includes(role);
-    if (item.roles === "manager") return role === UserRole.MANAGER;
-    if (item.roles === "gwen") return role === UserRole.GWEN;
-    if (item.roles === "executive") return (EXECUTIVE_ROLES as string[]).includes(role);
-    return false;
-  });
-
   return (
     <aside className="hidden w-56 shrink-0 md:block">
       <nav className="sticky top-16 flex flex-col gap-1 pt-4">
-        {filtered.map((item) => (
+        {navItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}

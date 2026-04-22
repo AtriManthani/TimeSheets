@@ -1,98 +1,41 @@
 import { prisma } from "@/lib/prisma";
-import { canViewOrgWideData } from "@/lib/auth";
-import { isValidTransition } from "@/lib/constants";
-import { TimesheetStatus, UserRole } from "@prisma/client";
-import { logAudit, AUDIT_ACTIONS } from "@/lib/workflow/agents/audit";
 
-// ─── Access-controlled timesheet queries ─────────────────────────────────────
-
-export async function getTimesheetById(id: string, requestingUserId: string, requestingRole: UserRole) {
+export async function getTimesheetById(id: string, requestingUserId: string) {
   const timesheet = await prisma.timesheet.findUnique({
     where: { id },
     include: {
-      user: { select: { id: true, name: true, email: true } },
       entries: { orderBy: { date: "asc" } },
-      versions: { orderBy: { versionNumber: "desc" } },
-      approvalTasks: {
-        include: {
-          assignee: { select: { id: true, name: true, email: true } },
-          decisions: true,
-        },
-        orderBy: { sequence: "asc" },
-      },
+      session: true,
+      user: { include: { profile: true } },
     },
   });
 
   if (!timesheet) return null;
+  if (timesheet.userId !== requestingUserId) throw new Error("FORBIDDEN");
 
-  // Access enforcement
-  if (canViewOrgWideData(requestingRole)) return timesheet;
-  if (timesheet.userId === requestingUserId) return timesheet;
-
-  if (requestingRole === UserRole.MANAGER) {
-    const isDirectReport = await prisma.managerRelationship.findFirst({
-      where: { managerId: requestingUserId, employeeId: timesheet.userId, isActive: true },
-    });
-    if (isDirectReport) return timesheet;
-  }
-
-  if (requestingRole === UserRole.GWEN) {
-    const hasTask = timesheet.approvalTasks.some((t) => t.assignedTo === requestingUserId);
-    if (hasTask) return timesheet;
-  }
-
-  throw new Error("FORBIDDEN");
+  return timesheet;
 }
 
-export async function getTimesheetsForUser(userId: string) {
+export async function getTimesheetsForUser(
+  userId: string,
+  filters?: { month?: number; year?: number; from?: Date; to?: Date }
+) {
+  const where: any = { userId };
+
+  if (filters?.month) where.month = filters.month;
+  if (filters?.year) where.year = filters.year;
+  if (filters?.from || filters?.to) {
+    where.weekStartDate = {};
+    if (filters.from) where.weekStartDate.gte = filters.from;
+    if (filters.to) where.weekStartDate.lte = filters.to;
+  }
+
   return prisma.timesheet.findMany({
-    where: { userId },
+    where,
     include: { entries: true },
     orderBy: { weekStartDate: "desc" },
   });
 }
-
-export async function getTimesheetsForManager(managerId: string) {
-  const directReports = await prisma.managerRelationship.findMany({
-    where: { managerId, isActive: true },
-    select: { employeeId: true },
-  });
-  const employeeIds = directReports.map((r) => r.employeeId);
-
-  return prisma.timesheet.findMany({
-    where: { userId: { in: employeeIds } },
-    include: {
-      user: { select: { id: true, name: true, email: true } },
-      approvalTasks: { where: { assignedTo: managerId } },
-    },
-    orderBy: { submittedAt: "desc" },
-  });
-}
-
-export async function getTimesheetsForGwen(gwenId: string) {
-  return prisma.timesheet.findMany({
-    where: {
-      approvalTasks: { some: { assignedTo: gwenId } },
-    },
-    include: {
-      user: { select: { id: true, name: true, email: true } },
-      approvalTasks: { where: { assignedTo: gwenId } },
-    },
-    orderBy: { submittedAt: "desc" },
-  });
-}
-
-export async function getOrgTimesheets() {
-  return prisma.timesheet.findMany({
-    include: {
-      user: { select: { id: true, name: true, email: true, role: true } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-  });
-}
-
-// ─── Timesheet creation ───────────────────────────────────────────────────────
 
 export async function createTimesheet(userId: string, weekStartDate: Date, weekEndDate: Date) {
   const existing = await prisma.timesheet.findUnique({
@@ -100,17 +43,14 @@ export async function createTimesheet(userId: string, weekStartDate: Date, weekE
   });
   if (existing) throw new Error("DUPLICATE_TIMESHEET");
 
+  const month = weekStartDate.getMonth() + 1;
+  const year = weekStartDate.getFullYear();
+
   const timesheet = await prisma.timesheet.create({
-    data: {
-      userId,
-      weekStartDate,
-      weekEndDate,
-      status: "IN_INTERVIEW",
-      createdBy: userId,
-    },
+    data: { userId, weekStartDate, weekEndDate, month, year, status: "IN_INTERVIEW" },
   });
 
-  const session = await prisma.timesheetInterviewSession.create({
+  await prisma.timesheetInterviewSession.create({
     data: {
       timesheetId: timesheet.id,
       userId,
@@ -120,34 +60,9 @@ export async function createTimesheet(userId: string, weekStartDate: Date, weekE
     },
   });
 
-  await logAudit({
-    actorId: userId,
-    action: AUDIT_ACTIONS.TIMESHEET_CREATED,
-    entityType: "Timesheet",
-    entityId: timesheet.id,
-    metadata: { weekStartDate, weekEndDate },
-  });
-
-  await logAudit({
-    actorId: userId,
-    action: AUDIT_ACTIONS.INTERVIEW_STARTED,
-    entityType: "TimesheetInterviewSession",
-    entityId: session.id,
-    metadata: { timesheetId: timesheet.id },
-  });
-
-  return { timesheet, session };
+  return timesheet;
 }
 
 export async function getInterviewSession(timesheetId: string) {
   return prisma.timesheetInterviewSession.findUnique({ where: { timesheetId } });
-}
-
-// ─── Version history ──────────────────────────────────────────────────────────
-
-export async function getTimesheetVersions(timesheetId: string) {
-  return prisma.timesheetVersion.findMany({
-    where: { timesheetId },
-    orderBy: { versionNumber: "desc" },
-  });
 }

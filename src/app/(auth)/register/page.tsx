@@ -1,116 +1,275 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
+
+type Step = "credentials" | "otp" | "success";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [managers, setManagers] = useState<{ value: string; label: string }[]>([]);
+  const [step, setStep] = useState<Step>("credentials");
+  const [userId, setUserId] = useState("");
+  const [otpChannel, setOtpChannel] = useState<"email" | "sms">("email");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [otpCode, setOtpCode] = useState("");
 
   const [form, setForm] = useState({
-    name: "",
-    email: "",
+    username: "",
     password: "",
-    title: "",
-    department: "",
-    managerId: "",
+    confirmPassword: "",
+    email: "",
     phone: "",
-    employeeNumber: "",
+    otpChannel: "email" as "email" | "sms",
   });
 
-  useEffect(() => {
-    fetch("/api/users/managers")
-      .then((r) => r.json())
-      .then((data) =>
-        setManagers(data.map((m: any) => ({ value: m.id, label: `${m.name} (${m.email})` })))
-      )
-      .catch(() => {});
-  }, []);
-
-  function set(field: keyof typeof form) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  function set(field: string, value: string) {
+    setForm((f) => ({ ...f, [field]: value }));
+    setError("");
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
+    setError("");
 
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    setLoading(true);
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          username: form.username,
+          password: form.password,
+          email: form.email || undefined,
+          phone: form.phone || undefined,
+          otpChannel: form.otpChannel,
+        }),
       });
-      const data = await res.json();
 
+      const data = await res.json();
       if (!res.ok) {
         const msg =
           typeof data.error === "string"
             ? data.error
-            : Object.values(data.error?.fieldErrors ?? {}).flat().join("; ") ||
-              "Registration failed";
-        setError(msg);
+            : Object.values((data.error as any)?.fieldErrors ?? {})
+                .flat()
+                .join("; ");
+        setError(msg || "Registration failed");
         return;
       }
 
-      router.push("/login?registered=1");
-    } catch {
-      setError("Registration failed. Please try again.");
+      setUserId(data.userId);
+      setOtpChannel(data.otpChannel);
+      setStep("otp");
     } finally {
       setLoading(false);
     }
   }
 
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, code: otpCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Invalid code");
+        return;
+      }
+      setStep("success");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (step === "success") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow text-center space-y-4">
+          <div className="text-4xl">✅</div>
+          <h1 className="text-xl font-semibold text-gray-900">Account verified!</h1>
+          <p className="text-sm text-gray-500">
+            Your account is active. Sign in to complete your profile.
+          </p>
+          <button
+            onClick={() => router.push("/login")}
+            className="w-full rounded-lg bg-primary-600 py-2.5 text-sm font-medium text-white hover:bg-primary-700"
+          >
+            Go to login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "otp") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow space-y-6">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">Enter verification code</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              A 4-digit code was sent to your{" "}
+              {otpChannel === "email" ? `email (${form.email})` : `phone (${form.phone})`}.
+            </p>
+          </div>
+
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              placeholder="0000"
+              value={otpCode}
+              onChange={(e) => { setOtpCode(e.target.value); setError(""); }}
+              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-center text-2xl font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-primary-500"
+              autoFocus
+              required
+            />
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <button
+              type="submit"
+              disabled={loading || otpCode.length !== 4}
+              className="w-full rounded-lg bg-primary-600 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+            >
+              {loading ? "Verifying..." : "Verify code"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-2xl bg-white p-8 shadow-lg">
-      <h2 className="mb-6 text-xl font-semibold text-gray-900">Create your account</h2>
-
-      {error && (
-        <div className="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
-          {error}
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Create account</h1>
+          <p className="text-sm text-gray-500 mt-1">Set up your Timeflux account</p>
         </div>
-      )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Input id="name" label="Full Name" value={form.name} onChange={set("name")} required placeholder="Jane Smith" />
-          <Input id="employeeNumber" label="Employee # (optional)" value={form.employeeNumber} onChange={set("employeeNumber")} placeholder="EMP001" />
-        </div>
-        <Input id="email" label="Work Email" type="email" value={form.email} onChange={set("email")} required placeholder="jane@its.org" />
-        <Input id="password" label="Password" type="password" value={form.password} onChange={set("password")} required placeholder="Min 8 chars, 1 uppercase, 1 number"
-          hint="Minimum 8 characters, one uppercase letter, one number"
-        />
-        <div className="grid grid-cols-2 gap-4">
-          <Input id="title" label="Job Title" value={form.title} onChange={set("title")} required placeholder="Systems Analyst" />
-          <Input id="department" label="Department" value={form.department} onChange={set("department")} required placeholder="Information Technology" />
-        </div>
-        <Input id="phone" label="Phone (optional)" type="tel" value={form.phone} onChange={set("phone")} placeholder="+1 (555) 000-0000" />
-        <Select
-          id="managerId"
-          label="Reporting Manager"
-          value={form.managerId}
-          onChange={set("managerId")}
-          options={managers}
-          placeholder="Select your manager..."
-        />
-        <Button type="submit" loading={loading} className="w-full">
-          Create Account
-        </Button>
-      </form>
+        <form onSubmit={handleRegister} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+            <input
+              type="text"
+              value={form.username}
+              onChange={(e) => set("username", e.target.value.toLowerCase())}
+              placeholder="e.g. jsmith"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              required
+            />
+            <p className="text-xs text-gray-400 mt-1">Lowercase letters, numbers, underscores only</p>
+          </div>
 
-      <p className="mt-4 text-center text-sm text-gray-500">
-        Already have an account?{" "}
-        <Link href="/login" className="text-primary-600 hover:underline">
-          Sign in
-        </Link>
-      </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input
+              type="password"
+              value={form.password}
+              onChange={(e) => set("password", e.target.value)}
+              placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm password</label>
+            <input
+              type="password"
+              value={form.confirmPassword}
+              onChange={(e) => set("confirmPassword", e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Verify via</label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  value="email"
+                  checked={form.otpChannel === "email"}
+                  onChange={() => set("otpChannel", "email")}
+                  className="accent-primary-600"
+                />
+                Email
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  value="sms"
+                  checked={form.otpChannel === "sms"}
+                  onChange={() => set("otpChannel", "sms")}
+                  className="accent-primary-600"
+                />
+                SMS
+              </label>
+            </div>
+          </div>
+
+          {form.otpChannel === "email" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email address</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => set("email", e.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                required
+              />
+            </div>
+          )}
+
+          {form.otpChannel === "sms" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Phone number (US)
+              </label>
+              <input
+                type="tel"
+                value={form.phone}
+                onChange={(e) => set("phone", e.target.value)}
+                placeholder="+12125551234"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                required
+              />
+              <p className="text-xs text-gray-400 mt-1">Format: +1XXXXXXXXXX</p>
+            </div>
+          )}
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-primary-600 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {loading ? "Creating account..." : "Create account"}
+          </button>
+        </form>
+
+        <p className="text-center text-sm text-gray-500">
+          Already have an account?{" "}
+          <Link href="/login" className="text-primary-600 hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

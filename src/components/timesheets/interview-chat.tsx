@@ -8,7 +8,13 @@ interface Message {
   content: string;
 }
 
-export function InterviewChat({ timesheetId }: { timesheetId: string }) {
+export function InterviewChat({
+  timesheetId,
+  onGenerated,
+}: {
+  timesheetId: string;
+  onGenerated?: () => void;
+}) {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -114,8 +120,12 @@ export function InterviewChat({ timesheetId }: { timesheetId: string }) {
       }
 
       if (data.warnings?.length > 0) setGenWarnings(data.warnings);
-      router.push(`/timesheets/${timesheetId}`);
-      router.refresh();
+      if (onGenerated) {
+        onGenerated();
+      } else {
+        router.push(`/timesheets/${timesheetId}`);
+        router.refresh();
+      }
     } catch {
       setError("Generation failed. Please try again.");
     } finally {

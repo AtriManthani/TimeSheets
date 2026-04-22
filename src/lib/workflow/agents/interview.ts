@@ -1,7 +1,6 @@
 import { callAIWithRetry, parseJsonFromAI } from "@/lib/ai/anthropic";
 import { buildInterviewPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/prisma";
-import { logAudit, AUDIT_ACTIONS } from "./audit";
 import type { InterviewState } from "../state";
 
 export async function interviewAgentNode(state: InterviewState): Promise<Partial<InterviewState>> {
@@ -57,14 +56,6 @@ export async function interviewAgentNode(state: InterviewState): Promise<Partial
       collectedData: newCollectedData as any,
       isComplete,
     },
-  });
-
-  await logAudit({
-    actorId: userId,
-    action: AUDIT_ACTIONS.INTERVIEW_MESSAGE,
-    entityType: "TimesheetInterviewSession",
-    entityId: sessionId,
-    metadata: { isComplete, step: currentStep },
   });
 
   return {

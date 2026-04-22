@@ -1,119 +1,93 @@
 "use client";
-import { Suspense, useState } from "react";
+import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 
-function LoginForm() {
+export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
-  const registered = searchParams.get("registered");
-
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    setError("");
     setLoading(true);
 
-    const result = await signIn("credentials", {
-      email: email.toLowerCase().trim(),
-      password,
-      redirect: false,
-    });
+    try {
+      const result = await signIn("credentials", {
+        username: username.toLowerCase().trim(),
+        password,
+        redirect: false,
+      });
 
-    setLoading(false);
+      if (result?.error) {
+        setError("Invalid username or password");
+        return;
+      }
 
-    if (result?.error) {
-      setError("Invalid email or password.");
-      return;
+      router.push("/dashboard");
+      router.refresh();
+    } finally {
+      setLoading(false);
     }
-
-    router.push(callbackUrl);
-    router.refresh();
   }
 
   return (
-    <div className="rounded-2xl bg-white p-8 shadow-lg">
-      <h2 className="mb-6 text-xl font-semibold text-gray-900">Sign in to your account</h2>
-
-      {registered && (
-        <div className="mb-4 rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-700">
-          Account created! Please sign in.
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Sign in</h1>
+          <p className="text-sm text-gray-500 mt-1">Welcome back to Timeflux</p>
         </div>
-      )}
 
-      {error && (
-        <div className="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => { setUsername(e.target.value); setError(""); }}
+              placeholder="your_username"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              autoComplete="username"
+              required
+              autoFocus
+            />
+          </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Input
-          id="email"
-          label="Work Email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@its.org"
-          required
-          autoComplete="email"
-        />
-        <Input
-          id="password"
-          label="Password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="••••••••"
-          required
-          autoComplete="current-password"
-        />
-        <Button type="submit" loading={loading} className="w-full">
-          Sign In
-        </Button>
-      </form>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError(""); }}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              autoComplete="current-password"
+              required
+            />
+          </div>
 
-      <p className="mt-6 text-center text-sm text-gray-500">
-        New employee?{" "}
-        <Link href="/register" className="text-primary-600 hover:underline">
-          Create an account
-        </Link>
-      </p>
+          {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="mt-4 rounded-md bg-gray-50 border border-gray-100 p-3">
-        <p className="text-xs font-medium text-gray-500 mb-1">Demo accounts:</p>
-        <div className="text-xs text-gray-400 space-y-0.5">
-          <p>employee1@its.org · Employee@123</p>
-          <p>manager1@its.org · Manager@123</p>
-          <p>gwen@its.org · Gwen@123</p>
-          <p>director1@its.org · Director@123</p>
-        </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-primary-600 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
+
+        <p className="text-center text-sm text-gray-500">
+          No account?{" "}
+          <Link href="/register" className="text-primary-600 hover:underline">
+            Create one
+          </Link>
+        </p>
       </div>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={
-      <div className="rounded-2xl bg-white p-8 shadow-lg">
-        <div className="animate-pulse space-y-4">
-          <div className="h-6 bg-gray-200 rounded w-2/3" />
-          <div className="h-10 bg-gray-100 rounded" />
-          <div className="h-10 bg-gray-100 rounded" />
-          <div className="h-10 bg-gray-200 rounded" />
-        </div>
-      </div>
-    }>
-      <LoginForm />
-    </Suspense>
   );
 }

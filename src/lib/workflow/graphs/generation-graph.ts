@@ -4,13 +4,12 @@ import { structuringAgentNode } from "../agents/structuring";
 import { complianceAgentNode } from "../agents/compliance";
 import { prisma } from "@/lib/prisma";
 import { calculateTotalHours } from "@/lib/utils";
-import { logAudit, AUDIT_ACTIONS } from "../agents/audit";
 import type { TimesheetGeneratedData } from "@/lib/validation/schemas";
 
 async function persistTimesheetNode(
   state: typeof GenerationStateAnnotation.State
 ): Promise<Partial<typeof GenerationStateAnnotation.State>> {
-  const { timesheetId, userId, structuredData, complianceResult } = state;
+  const { timesheetId, structuredData, complianceResult } = state;
 
   if (!structuredData || !complianceResult?.isValid) {
     return {
@@ -65,16 +64,7 @@ async function persistTimesheetNode(
       totalHours,
       regularHours: totalRegular,
       overtimeHours: totalOvertime,
-      updatedBy: userId,
     },
-  });
-
-  await logAudit({
-    actorId: userId,
-    action: AUDIT_ACTIONS.TIMESHEET_GENERATED,
-    entityType: "Timesheet",
-    entityId: timesheetId,
-    metadata: { totalHours, warnings: complianceResult.warnings },
   });
 
   return { generationComplete: true };

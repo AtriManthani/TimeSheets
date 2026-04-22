@@ -1,12 +1,9 @@
 import { NextAuthOptions, getServerSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { UserRole } from "@prisma/client";
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",
@@ -16,14 +13,14 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: "credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        username: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        if (!credentials?.username || !credentials?.password) return null;
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email.toLowerCase() },
+          where: { username: credentials.username.toLowerCase().trim() },
           include: { profile: true },
         });
 
@@ -34,9 +31,8 @@ export const authOptions: NextAuthOptions = {
 
         return {
           id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
+          username: user.username,
+          email: user.email ?? undefined,
           profileComplete: user.profile?.isComplete ?? false,
         };
       },
@@ -46,7 +42,7 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = (user as any).role;
+        token.username = (user as any).username;
         token.profileComplete = (user as any).profileComplete;
       }
       return token;
@@ -54,7 +50,7 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id as string;
-        session.user.role = token.role as UserRole;
+        session.user.username = token.username as string;
         session.user.profileComplete = token.profileComplete as boolean;
       }
       return session;
@@ -68,25 +64,4 @@ export async function requireAuth() {
   const session = await getSession();
   if (!session) throw new Error("UNAUTHORIZED");
   return session;
-}
-
-export async function requireRole(roles: UserRole[]) {
-  const session = await requireAuth();
-  if (!roles.includes(session.user.role)) throw new Error("FORBIDDEN");
-  return session;
-}
-
-export const EXECUTIVE_ROLES: UserRole[] = [
-  UserRole.DIRECTOR,
-  UserRole.COMMISSIONER,
-  UserRole.HR_LEAD,
-  UserRole.CITO,
-];
-
-export function isExecutive(role: UserRole): boolean {
-  return EXECUTIVE_ROLES.includes(role);
-}
-
-export function canViewOrgWideData(role: UserRole): boolean {
-  return isExecutive(role) || role === UserRole.ADMIN;
 }

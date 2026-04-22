@@ -2,7 +2,21 @@ import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
 export default withAuth(
-  function middleware() {
+  function middleware(req) {
+    const { pathname } = req.nextUrl;
+    const token = req.nextauth.token;
+
+    // Redirect to profile setup if authenticated but profile not complete
+    if (
+      token &&
+      !token.profileComplete &&
+      !pathname.startsWith("/profile/setup") &&
+      !pathname.startsWith("/api/") &&
+      !pathname.startsWith("/_next")
+    ) {
+      return NextResponse.redirect(new URL("/profile/setup", req.url));
+    }
+
     return NextResponse.next();
   },
   {
@@ -10,19 +24,17 @@ export default withAuth(
       authorized: ({ token, req }) => {
         const { pathname } = req.nextUrl;
 
-        // Always allow these public paths
         const publicPaths = [
           "/login",
           "/register",
           "/api/auth",
-          "/api/users/managers", // needed on register page before auth
+          "/api/users/check-username",
           "/_next",
           "/favicon.ico",
         ];
 
         if (publicPaths.some((p) => pathname.startsWith(p))) return true;
 
-        // Everything else requires a valid JWT
         return !!token;
       },
     },
